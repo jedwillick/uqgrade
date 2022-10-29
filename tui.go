@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -58,14 +60,46 @@ type tabModel struct {
 	TabContent []courseModel
 	activeTab  int
 	input      textinput.Model
+	keys       keyMap
+	help       help.Model
 }
 
-func validator(text string) error {
-	if strings.HasSuffix(text, "%") {
-		text = strings.TrimSuffix(text, "%")
-	}
-	_, err := strconv.ParseFloat(text, 64)
-	return err
+type keyMap struct {
+	Up          key.Binding
+	Down        key.Binding
+	Left        key.Binding
+	Right       key.Binding
+	NextTab     key.Binding
+	PrevTab     key.Binding
+	DelTab      key.Binding
+	NewTab      key.Binding
+	Help        key.Binding
+	Quit        key.Binding
+	PromptEnter key.Binding
+	PromptClose key.Binding
+}
+
+var keys = keyMap{
+	Up:          key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "up")),
+	Down:        key.NewBinding(key.WithKeys("down", "enter"), key.WithHelp("↓/enter", "down")),
+	Left:        key.NewBinding(key.WithKeys("left"), key.WithHelp("←", "left")),
+	Right:       key.NewBinding(key.WithKeys("right"), key.WithHelp("→", "right")),
+	NextTab:     key.NewBinding(key.WithKeys("tab", "]"), key.WithHelp("tab/]", "next tab")),
+	PrevTab:     key.NewBinding(key.WithKeys("shift+tab", "["), key.WithHelp("shift+tab/[", "prev tab")),
+	DelTab:      key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "delete tab")),
+	NewTab:      key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "new tab")),
+	Help:        key.NewBinding(key.WithKeys("?", "ctrl+h"), key.WithHelp("?", "help")),
+	Quit:        key.NewBinding(key.WithKeys("ctrl+c", "q"), key.WithHelp("q", "quit")),
+	PromptEnter: key.NewBinding(key.WithKeys("enter")),
+	PromptClose: key.NewBinding(key.WithKeys("esc", "up", "ctrl+n")),
+}
+
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Help, k.Quit}
+}
+
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Up, k.Down, k.Left, k.Right}, {k.NextTab, k.PrevTab, k.DelTab, k.NewTab}, {k.Help, k.Quit}}
 }
 
 func initialModel(course Course) courseModel {
@@ -77,8 +111,15 @@ func initialModel(course Course) courseModel {
 	var t textinput.Model
 	for i, a := range course.Assessment {
 		t = textinput.New()
+		t.CharLimit = 10
 		t.CursorStyle = cursorStyle
-		t.Validate = validator
+		t.Validate = func(text string) error {
+			if strings.HasSuffix(text, "%") {
+				text = strings.TrimSuffix(text, "%")
+			}
+			_, err := strconv.ParseFloat(text, 64)
+			return err
+		}
 
 		t.Prompt = fmt.Sprintf("%-20s(%.1f): ", a.Name, a.Weight)
 		if i == 0 {
@@ -93,10 +134,6 @@ func initialModel(course Course) courseModel {
 	return m
 }
 
-func notEditable(text string) error {
-	return errors.New("not editable")
-}
-
 func initialOverall(courses []Course) courseModel {
 	m := courseModel{
 		inputs:    make([]textinput.Model, len(courses)),
@@ -107,7 +144,6 @@ func initialOverall(courses []Course) courseModel {
 	for i, a := range courses {
 		t = textinput.New()
 		t.CursorStyle = cursorStyle
-		// t.Validate = notEditable
 
 		t.Prompt = fmt.Sprintf("%-19s(7.00): ", a.Name)
 		if i == 0 {
@@ -129,8 +165,6 @@ func (m courseModel) Init() tea.Cmd {
 func (m *courseModel) updateInputs(msg tea.Msg) tea.Cmd {
 	var cmds = make([]tea.Cmd, len(m.inputs))
 
-	// Only text inputs with Focus() set will respond, so it's safe to simply
-	// update all of them here without any further logic.
 	for i := range m.inputs {
 		m.inputs[i], cmds[i] = m.inputs[i].Update(msg)
 	}
@@ -166,10 +200,10 @@ func (m *courseModel) addGrades(assessment []Assessment) (float64, int) {
 		}
 		if strings.HasSuffix(input, "%") {
 			input = strings.TrimSuffix(input, "%")
-			mark, _ := strconv.ParseFloat(input, 32)
+			mark, _ := strconv.ParseFloat(input, 64)
 			total += (mark / 100) * assessment[i].Weight
 		} else {
-			mark, _ := strconv.ParseFloat(input, 32)
+			mark, _ := strconv.ParseFloat(input, 64)
 			total += mark
 		}
 	}
@@ -186,9 +220,6 @@ func (m *courseModel) View(t tabModel) string {
 
 func (m *courseModel) courseView() string {
 	var b strings.Builder
-	// b.WriteString(titleStyle.Render("== COMP3506 =="))
-	// b.WriteRune('\n')
-
 	for i := range m.inputs {
 		b.WriteString(m.inputs[i].View())
 		b.WriteRune('\n')
@@ -204,9 +235,9 @@ func (m *courseModel) courseView() string {
 		gradeStr = focusedStyle.Render(gradeStr)
 	}
 	b.WriteString(strings.Repeat("-", 35) + "\n")
-	fmt.Fprintf(&b, "%s\n%s\n\n", totalStr, gradeStr)
+	fmt.Fprintf(&b, "%s\n%s\n", totalStr, gradeStr)
 	for i := m.grade + 1; i <= 7; i++ {
-		b.WriteString(fmt.Sprintf("To get a %d you need %.2f more percent\n", i, CUTOFFS[i]-m.total))
+		b.WriteString(fmt.Sprintf("\nTo get a %d you need %.2f more percent", i, CUTOFFS[i]-m.total))
 	}
 
 	return b.String()
@@ -230,7 +261,7 @@ func (m *courseModel) overallView(t tabModel) string {
 	if m.focusIndex == len(m.inputs) {
 		gradeStr = focusedStyle.Render(gradeStr)
 	}
-	fmt.Fprintf(&b, "%s\n\n", gradeStr)
+	fmt.Fprintf(&b, "%s\n", gradeStr)
 
 	return b.String()
 }
@@ -242,17 +273,27 @@ func (m tabModel) Init() tea.Cmd {
 func (m tabModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	tab := &m.TabContent[m.activeTab]
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.help.Width = msg.Width
 	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, m.keys.Quit):
+			return m, tea.Quit
+		case key.Matches(msg, m.keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
+		}
 		if m.input.Focused() {
-			switch msg.String() {
-			case "ctrl+c", "q":
-				return m, tea.Quit
-			case "enter", "esc":
+			switch {
+			case key.Matches(msg, m.keys.PromptEnter, m.keys.PromptClose):
 				m.input.SetCursorMode(textinput.CursorHide)
 				m.input.Blur()
+				if key.Matches(msg, m.keys.PromptClose) {
+					return m, textinput.Blink
+				}
+
 				raw := m.input.Value()
 				if raw == "" {
-					return m, nil
+					return m, textinput.Blink
 				}
 				codes := strings.FieldsFunc(raw, func(r rune) bool {
 					return r == ',' || r == ' '
@@ -279,34 +320,32 @@ func (m tabModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Tabs = append(m.Tabs[:index+1], m.Tabs[index:]...)
 					m.Tabs[index] = course.Name
 					m.TabContent = append(m.TabContent[:index+1], m.TabContent[index:]...)
-					m.TabContent[index] = initialModel(list[0])
+					m.TabContent[index] = initialModel(course)
 
 					m.activeTab = index
 				}
 
-				return m, nil
+				return m, textinput.Blink
 
 			}
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
 			return m, cmd
 		}
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-		case "tab", "]":
+		switch {
+		case key.Matches(msg, m.keys.NextTab):
 			m.activeTab++
 			if m.activeTab >= len(m.Tabs) {
 				m.activeTab = 0
 			}
 			return m, textinput.Blink
-		case "shift+tab", "[":
+		case key.Matches(msg, m.keys.PrevTab):
 			m.activeTab--
 			if m.activeTab < 0 {
 				m.activeTab = len(m.Tabs) - 1
 			}
 			return m, textinput.Blink
-		case "d":
+		case key.Matches(msg, m.keys.DelTab):
 			if m.Tabs[m.activeTab] != "OVERALL" {
 				m.Tabs = append(m.Tabs[:m.activeTab], m.Tabs[m.activeTab+1:]...)
 				m.TabContent = append(m.TabContent[:m.activeTab], m.TabContent[m.activeTab+1:]...)
@@ -315,14 +354,14 @@ func (m tabModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeTab = 0
 			}
 			return m, textinput.Blink
-		case "a":
+		case key.Matches(msg, m.keys.NewTab):
 			m.input.SetValue("")
 			m.input.Focus()
 			m.input.SetCursorMode(textinput.CursorBlink)
-			return m, nil
+			return m, textinput.Blink
 
 		// Set focus to next input
-		case "enter", "up", "down":
+		case key.Matches(msg, m.keys.Up, m.keys.Down):
 			s := msg.String()
 			// Cycle indexes
 			if s == "up" {
@@ -339,8 +378,7 @@ func (m tabModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if tab.focusIndex < 0 {
 				tab.focusIndex = len(tab.inputs)
 			}
-			// cmds := make([]tea.Cmd, len(tab.inputs))
-			for i := 0; i <= len(tab.inputs)-1; i++ {
+			for i := 0; i < len(tab.inputs); i++ {
 				if i == tab.focusIndex {
 					// Set focused state
 					tab.inputs[i].Focus()
@@ -356,8 +394,6 @@ func (m tabModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		}
 	}
-	// Handle character input and blinking
-
 	return m, tab.updateInputs(msg)
 }
 
@@ -410,13 +446,18 @@ func (m tabModel) View() string {
 	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
 	doc.WriteString(row)
 	doc.WriteString("\n")
+
 	if numTabs <= NUM_TABS_SWITCH {
 		doc.WriteString(windowStyle.Width(MIN_WIN_WIDTH + (2 * (numTabs - 1))).Render(content))
 	} else {
 		doc.WriteString(windowStyle.Width((MIN_TAB_WIDTH+2)*numTabs - 2).Render(content))
 	}
+
 	doc.WriteString("\n")
 	doc.WriteString(m.input.View())
+	doc.WriteString("\n")
+	doc.WriteString("\n")
+	doc.WriteString(m.help.View(m.keys))
 	return docStyle.Render(doc.String())
 }
 
@@ -432,8 +473,14 @@ func tui(courses []Course) {
 
 	t := textinput.New()
 	t.Placeholder = "Course Code(s)"
+	t.Validate = func(text string) error {
+		if strings.Contains(text, "?") {
+			return errors.New("")
+		}
+		return nil
+	}
 
-	m := tabModel{Tabs: tabs, TabContent: tabContent, input: t}
+	m := tabModel{Tabs: tabs, TabContent: tabContent, input: t, keys: keys, help: help.New()}
 	if err := tea.NewProgram(m).Start(); err != nil {
 		log.Fatalln("Error running program:", err)
 	}
