@@ -22,23 +22,13 @@ const (
 )
 
 var (
-	focusedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	blurredStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	titleStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
-	cursorStyle         = focusedStyle.Copy()
-	noStyle             = lipgloss.NewStyle()
-	helpStyle           = blurredStyle.Copy()
-	cursorModeHelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-
-	focusedButton = focusedStyle.Copy().Render("[ Submit ]")
-	blurredButton = fmt.Sprintf("[ %s ]", blurredStyle.Render("Submit"))
-
-	defaultWidth = 20
-
-	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
-	activeTabBorder   = tabBorderWithBottom("┘", " ", "└")
+	focusedStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	cursorStyle       = focusedStyle.Copy()
+	noStyle           = lipgloss.NewStyle()
 	docStyle          = lipgloss.NewStyle().Padding(1, 2, 1, 2)
 	highlightColor    = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
+	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
+	activeTabBorder   = tabBorderWithBottom("┘", " ", "└")
 	inactiveTabStyle  = lipgloss.NewStyle().Border(inactiveTabBorder, true).BorderForeground(highlightColor).Padding(0, 1)
 	activeTabStyle    = inactiveTabStyle.Copy().Border(activeTabBorder, true)
 	windowStyle       = lipgloss.NewStyle().BorderForeground(highlightColor).Padding(1, 2).Align(lipgloss.Left).Border(lipgloss.NormalBorder()).UnsetBorderTop()
