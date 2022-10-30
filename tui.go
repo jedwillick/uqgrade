@@ -52,6 +52,7 @@ type tabModel struct {
 	input      textinput.Model
 	keys       keyMap
 	help       help.Model
+	when       When
 }
 
 type keyMap struct {
@@ -292,7 +293,7 @@ func (m tabModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					codes[i] = strings.TrimSpace(codes[i])
 				}
 
-				list, invalid := scrap(codes)
+				list, invalid := scrap(codes, m.when)
 				if len(invalid) > 0 {
 					m.input.SetValue(fmt.Sprintf("Invalid course codes: %s", strings.Join(invalid, ", ")))
 				} else {
@@ -434,6 +435,7 @@ func (m tabModel) View() string {
 	}
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
+	doc.WriteString(m.when.FullyQualified + "\n")
 	doc.WriteString(row)
 	doc.WriteString("\n")
 
@@ -451,7 +453,7 @@ func (m tabModel) View() string {
 	return docStyle.Render(doc.String())
 }
 
-func tui(courses []Course) {
+func tui(courses []Course, when When) {
 	var tabs []string
 	var tabContent []courseModel
 	for _, c := range courses {
@@ -470,7 +472,7 @@ func tui(courses []Course) {
 		return nil
 	}
 
-	m := tabModel{Tabs: tabs, TabContent: tabContent, input: t, keys: keys, help: help.New()}
+	m := tabModel{Tabs: tabs, TabContent: tabContent, input: t, keys: keys, help: help.New(), when: when}
 	if err := tea.NewProgram(m).Start(); err != nil {
 		log.Fatalln("Error running program:", err)
 	}

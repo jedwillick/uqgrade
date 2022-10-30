@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,7 +21,13 @@ type Course struct {
 	Assessment []Assessment
 }
 
-func scrap(codes []string) ([]Course, []string) {
+type When struct {
+	Semester       int
+	Year           int
+	FullyQualified string
+}
+
+func scrap(codes []string, when When) ([]Course, []string) {
 	// Instantiate default collector
 	c := colly.NewCollector(
 		colly.AllowedDomains("my.uq.edu.au", "course-profiles.uq.edu.au"),
@@ -29,7 +36,7 @@ func scrap(codes []string) ([]Course, []string) {
 	courses := make([]Course, 0, len(codes))
 	var current string
 
-	c.OnXML("(//table[@class='offerings']//a[contains(.,'Semester 2, 2022')]/../..//a[@class='profile-available'])[1]", func(f *colly.XMLElement) {
+	c.OnXML(fmt.Sprintf("(//table[@class='offerings']//a[contains(.,'%s')]/../..//a[@class='profile-available'])[1]", when.FullyQualified), func(f *colly.XMLElement) {
 		link := f.Attr("href")
 		if link == "" {
 			log.Debugf("%s: no link found\n", current)
