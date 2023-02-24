@@ -14,13 +14,13 @@ func currentSemester(when *When) {
 	now := time.Now()
 	month := now.Month()
 	when.Year = now.Year()
-	if month >= 3 && month <= 7 {
+	if month >= 2 && month <= 7 {
 		when.Semester = 1
 	} else if month >= 8 && month <= 11 {
 		when.Semester = 2
 	} else {
 		when.Semester = 3
-		if month <= 2 {
+		if month < 2 {
 			when.Year = when.Year - 1
 		}
 	}
@@ -40,7 +40,7 @@ func fullyQualifiedWhen(when *When) error {
 	switch when.Semester {
 	case 0:
 		currentSemester(when)
-		fullyQualifiedWhen(when)
+		return fullyQualifiedWhen(when)
 	case 1, 2:
 		when.FullyQualified = fmt.Sprintf("Semester %d, %d", when.Semester, when.Year)
 	case 3:
