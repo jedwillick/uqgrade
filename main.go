@@ -2,13 +2,17 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"runtime"
 	"time"
 
+	"github.com/adrg/xdg"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
+
+var CACHE = path.Join(xdg.CacheHome, "uqgrade")
 
 func currentSemester(when *When) {
 	now := time.Now()
@@ -72,6 +76,9 @@ func main() {
 			err := fullyQualifiedWhen(&when)
 			if err != nil {
 				log.Fatal(err)
+			}
+			if os.MkdirAll(CACHE, 0755) != nil {
+				log.Fatal("Unable to create cache directory ", err)
 			}
 			courses, invalid := scrap(args, when)
 			if len(invalid) > 0 {

@@ -28,6 +28,7 @@ require (
 )
 
 require (
+	github.com/adrg/xdg v0.4.0
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/containerd/console v1.0.3 // indirect
 	github.com/gocolly/colly/v2 v2.1.0

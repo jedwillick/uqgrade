@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,13 +15,13 @@ import (
 )
 
 type Assessment struct {
-	Name   string
-	Weight float64
+	Name   string  `json:"name"`
+	Weight float64 `json:"weight"`
 }
 
 type Course struct {
-	Name       string
-	Assessment []Assessment
+	Name       string       `json:"name"`
+	Assessment []Assessment `json:"assessment"`
 }
 
 type When struct {
@@ -78,12 +81,38 @@ func scrap(codes []string, when When) ([]Course, []string) {
 	})
 
 	var invalidCodes []string
-	for _, course := range codes {
-		current = strings.ToUpper(course)
+	for _, code := range codes {
+		cache := path.Join(CACHE, fmt.Sprintf("%d-%d-%s", when.Year, when.Semester, code))
+		current = strings.ToUpper(code)
 		startLen := len(courses)
-		c.Visit("https://my.uq.edu.au/programs-courses/course.html?course_code=" + current)
-		if len(courses) == startLen {
+		raw, err := os.ReadFile(cache)
+		if err == nil {
+			log.Debugf("CACHE: found %s @ %s", code, cache)
+			var course Course
+			err = json.Unmarshal(raw, &course)
+			if err == nil {
+				courses = append(courses, course)
+				continue
+			}
+		}
+
+		err = c.Visit("https://my.uq.edu.au/programs-courses/course.html?course_code=" + current)
+		if err != nil || len(courses) == startLen {
 			invalidCodes = append(invalidCodes, current)
+		} else {
+			log.Debugf("CACHE: caching %s @ %s", code, cache)
+			data, err := json.Marshal(courses[len(courses)-1])
+			if err != nil {
+				log.Errorf("CACHE: unable to cache %s: %s", cache, err)
+				continue
+			}
+			err = os.WriteFile(cache, data, 0644)
+			if err != nil {
+				log.Errorf("CACHE: unable to cache %s: %s", cache, err)
+				os.Remove(cache) // Avoid partially written cache files
+				continue
+			}
+
 		}
 	}
 	log.Debug("FOUND: ", courses)
